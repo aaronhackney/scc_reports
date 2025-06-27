@@ -4,11 +4,11 @@ import requests
 from dotenv import load_dotenv
 from pathlib import Path
 import hashlib
-import logging
 from loguru import logger
 from tqdm import tqdm
-import click
-from typing import List, Dict, Optional
+from typing import List, Dict
+import gzip
+import shutil
 
 class FileDownloader:
     def __init__(self, api_url: str, api_key: str, download_dir: str):
@@ -93,8 +93,41 @@ class FileDownloader:
             logger.error(f"Download error: {e}")
             return False
 
+    def ungzip_file(self, file_path: Path,output_path="/tmp") -> bool:
+        """Decompress a gzip file if it's compressed
+        
+        Args:
+            file_path (Path): Path to the gzip file
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            if not file_path.exists():
+                logger.error(f"File {file_path} does not exist")
+                return False
+
+            # Check if file is gzip compressed
+            with open(file_path, 'rb') as f:
+                magic_number = f.read(2)
+            if magic_number != b'\x1f\x8b':  # Gzip magic number
+                logger.info(f"{file_path} is not a gzip file")
+                return True
+            
+            logger.info(f"Decompressing {file_path} to {output_path}")
+            
+            with gzip.open(file_path, 'rb') as f_in:
+                with open(f"{output_path}/{file_path.name.rstrip('.gz')}", 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+
+            logger.success(f"Successfully decompressed {file_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Error decompressing {file_path}: {e}")
+            return False
+
     def sync_files(self):
-        """Download missing or updated files"""
+        """Download missing or updated files and decompress if needed"""
         logger.info("Starting sync process")
         
         remote_files = self.get_remote_files().get("download_status", [])
@@ -114,13 +147,11 @@ class FileDownloader:
         logger.info(f"Need to download {len(files_to_download)} files")
         
         for file_info in files_to_download:
-            self.download_file(file_info)
+            if self.download_file(file_info):
+                file_path = self.download_dir / file_info['file_name']
+                # we only want to temporarily unzip these files...
+                self.ungzip_file(file_path)
 
-# @click.command()
-# @click.option('--api-url', envvar='API_URL', required=True)
-# @click.option('--api-key', envvar='API_KEY', required=True)
-# @click.option('--download-dir', envvar='DOWNLOAD_DIR', default='./downloads')
-# @click.option('--verbose', '-v', is_flag=True)
 def main(api_url: str, api_key: str, download_dir: str, verbose: bool):
     """Synchronize files from remote API"""
     if verbose:
@@ -134,4 +165,4 @@ if __name__ == "__main__":
     api_key = os.getenv("API_KEY")
     api_url = os.getenv("API_URL")
     download_dir = os.getenv("DOWNLOAD_DIR", "./downloads")
-    main(api_url, api_key, download_dir, True)
+    main(api_url, api_key, download_dir, False)

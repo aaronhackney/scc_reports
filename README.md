@@ -5,7 +5,8 @@ This script downloads background search results from the Cisco Security Center (
 ## Usage
 
 ```bash
-python download_files.py
+pip3 install -r requirements.txt
+python3 download_files.py
 ```
 
 ## Environment Variables
