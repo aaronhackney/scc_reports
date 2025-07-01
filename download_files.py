@@ -11,12 +11,14 @@ import gzip
 import shutil
 
 class FileDownloader:
-    def __init__(self, api_url: str, api_key: str, download_dir: str):
+    def __init__(self, api_url: str, api_key: str, download_dir: str, export_dir: str):
         """Initialize the file downloader"""
         self.api_url = api_url
         self.api_key = api_key
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(parents=True, exist_ok=True)
+        self.export_dir = Path(export_dir)
+        self.export_dir.mkdir(parents=True, exist_ok=True)
         self.session = requests.Session()
         self.setup_logging()
 
@@ -93,7 +95,7 @@ class FileDownloader:
             logger.error(f"Download error: {e}")
             return False
 
-    def ungzip_file(self, file_path: Path,output_path="/tmp") -> bool:
+    def ungzip_file(self, file_path: Path) -> bool:
         """Decompress a gzip file if it's compressed
         
         Args:
@@ -114,10 +116,10 @@ class FileDownloader:
                 logger.info(f"{file_path} is not a gzip file")
                 return True
             
-            logger.info(f"Decompressing {file_path} to {output_path}")
+            logger.info(f"Decompressing {file_path} to {self.export_dir}")
             
             with gzip.open(file_path, 'rb') as f_in:
-                with open(f"{output_path}/{file_path.name.rstrip('.gz')}", 'wb') as f_out:
+                with open(f"{self.export_dir}/{file_path.name.rstrip('.gz')}", 'wb') as f_out:
                     shutil.copyfileobj(f_in, f_out)
 
             logger.success(f"Successfully decompressed {file_path}")
@@ -152,12 +154,12 @@ class FileDownloader:
                 # we only want to temporarily unzip these files...
                 self.ungzip_file(file_path)
 
-def main(api_url: str, api_key: str, download_dir: str, verbose: bool):
+def main(api_url: str, api_key: str, download_dir: str, export_dir: str, verbose: bool):
     """Synchronize files from remote API"""
     if verbose:
         logger.add(sys.stderr, level="DEBUG")
     
-    downloader = FileDownloader(api_url, api_key, download_dir)
+    downloader = FileDownloader(api_url, api_key, download_dir, export_dir)
     downloader.sync_files()
 
 if __name__ == "__main__":
@@ -165,4 +167,5 @@ if __name__ == "__main__":
     api_key = os.getenv("API_KEY")
     api_url = os.getenv("API_URL")
     download_dir = os.getenv("DOWNLOAD_DIR", "./downloads")
-    main(api_url, api_key, download_dir, False)
+    export_dir= os.getenv("EXPORT_DIR", "./exports")
+    main(api_url, api_key, download_dir, export_dir, False)
